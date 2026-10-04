@@ -26,17 +26,20 @@ jobs:
             os: windows-latest
             command: build:win
             artifact: windows-x64
-            files: dist/*.exe
+            extension: .exe
+            release_file: ControlPanel_latest_x64.exe
           - title: macOS ARM64
             os: macos-14
             command: build:mac
             artifact: macos-arm64
-            files: dist/*.dmg
+            extension: .dmg
+            release_file: ControlPanel_latest_arm64.dmg
           - title: Linux x64
             os: ubuntu-latest
             command: build:linux
             artifact: linux-x64
-            files: dist/*.AppImage
+            extension: .AppImage
+            release_file: ControlPanel_latest_x64.AppImage
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -53,11 +56,13 @@ jobs:
         run: bun ci
       - name: Собрать приложение
         run: bun run ${{ matrix.command }}
+      - name: Подготовить имя установщика
+        run: bun scripts/rename-release-asset.mjs ${{ matrix.extension }} ${{ matrix.release_file }}
       - name: Передать установщик в задачу публикации
         uses: actions/upload-artifact@v7
         with:
           name: latest-${{ matrix.artifact }}
-          path: ${{ matrix.files }}
+          path: dist/${{ matrix.release_file }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -100,6 +105,12 @@ jobs:
           NOTES="Автоматическая сборка последнего проверенного коммита ветки main: [${SHORT_SHA}](https://github.com/${GITHUB_REPOSITORY}/commit/${LATEST_SHA})."
           if gh release view latest >/dev/null 2>&1; then
             gh release upload latest release-assets/* --clobber
+            while IFS= read -r ASSET_NAME; do
+              case "$ASSET_NAME" in
+                ControlPanel_latest_x64.exe|ControlPanel_latest_arm64.dmg|ControlPanel_latest_x64.AppImage) ;;
+                *) gh release delete-asset latest "$ASSET_NAME" --yes ;;
+              esac
+            done < <(gh release view latest --json assets --jq '.assets[].name')
             gh release edit latest \
               --title "Последняя сборка main" \
               --notes "$NOTES" \

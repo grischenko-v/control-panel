@@ -61,6 +61,8 @@ bun run build:linux
 4. Старые `.exe`, `.dmg` и `.AppImage` заменяются новыми файлами.
 5. Временные артефакты GitHub Actions удаляются.
 
+Файлы плавающего релиза имеют постоянные имена без номера SemVer и дефисов: `ControlPanel_latest_x64.exe`, `ControlPanel_latest_arm64.dmg` и `ControlPanel_latest_x64.AppImage`.
+
 `latest` намеренно отмечается как последний релиз GitHub и отображается выше стабильных версий. Это постоянно обновляемая сборка текущего состояния `main`, поэтому для воспроизводимого развёртывания следует выбирать стабильный тег `vX.Y.Z`.
 
 Для работы плавающего релиза функция [**Immutable releases**](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) должна быть выключена: тег `latest` перемещается, а файлы релиза заменяются при каждом обновлении.

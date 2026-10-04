@@ -13,6 +13,9 @@ const workflow = Bun.YAML.parse(
         };
       };
     };
+    publish: {
+      steps: Array<{ run?: string }>;
+    };
   };
 };
 
@@ -30,5 +33,14 @@ describe('файлы плавающего релиза', () => {
 
   test('не содержат дефисов', () => {
     expect(fileNames.every((fileName) => !fileName.includes('-'))).toBe(true);
+  });
+
+  test('удаляет старые файлы по ID, а не по небезопасному имени', () => {
+    const publishScript = workflow.jobs.publish.steps
+      .map(({ run = '' }) => run)
+      .join('\n');
+
+    expect(publishScript).toContain('releases/assets/${ASSET_ID}');
+    expect(publishScript).not.toContain('gh release delete-asset');
   });
 });

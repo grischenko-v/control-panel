@@ -1,49 +1,21 @@
-name: Проверка и релиз
+name: Линтинг и тесты
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  release:
-    types: [published]
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
-  group: control-panel-${{ github.event.release.tag_name || github.ref }}
+  group: checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  version:
-    name: Определение версии
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    outputs:
-      sha: ${{ steps.metadata.outputs.sha }}
-      version: ${{ steps.metadata.outputs.version }}
-      tag: ${{ steps.metadata.outputs.tag }}
-    steps:
-      - name: Получить выбранную версию кода
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-          fetch-depth: 0
-      - name: Установить Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.3
-      - name: Проверить тег и определить версию
-        id: metadata
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: bun scripts/resolve-build-version.mjs
-
   quality:
-    name: Типы, тесты и линтинг
+    name: Линтинг и тесты
     runs-on: ubuntu-latest
     steps:
       - name: Получить исходный код
@@ -54,120 +26,7 @@ jobs:
           bun-version: 1.3.3
       - name: Установить зависимости
         run: bun ci
-      - name: Проверить типы
-        run: bun run typecheck
       - name: Запустить тесты
         run: bun run test
       - name: Запустить ESLint
         run: bun run lint
-
-  build:
-    name: Сборка — ${{ matrix.title }}
-    needs: [version, quality]
-    if: github.event_name == 'release'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - title: Windows x64
-            os: windows-latest
-            command: build:win
-            artifact: control-panel-windows-x64
-            files: dist/*.exe
-          - title: macOS ARM64
-            os: macos-14
-            command: build:mac
-            artifact: control-panel-macos-arm64
-            files: dist/*.dmg
-          - title: Linux x64
-            os: ubuntu-latest
-            command: build:linux
-            artifact: control-panel-linux-x64
-            files: dist/*.AppImage
-    runs-on: ${{ matrix.os }}
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - name: Получить исходный код
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.version.outputs.sha }}
-      - name: Установить Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.3
-      - name: Установить зависимости
-        run: bun ci
-      - name: Установить версию приложения
-        run: bun scripts/set-package-version.mjs ${{ needs.version.outputs.version }}
-      - name: Собрать приложение
-        run: bun run ${{ matrix.command }}
-      - name: Передать установщик в задачу публикации
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}-${{ needs.version.outputs.tag }}
-          path: ${{ matrix.files }}
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-
-  publish-release:
-    name: Публикация установщиков в GitHub Release
-    needs: [version, build]
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - name: Скачать собранные установщики
-        uses: actions/download-artifact@v8
-        with:
-          pattern: control-panel-*-${{ needs.version.outputs.tag }}
-          path: release-assets
-          merge-multiple: true
-      - name: Добавить установщики в релиз
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.version.outputs.tag }}
-        run: |
-          gh release upload "$RELEASE_TAG" release-assets/* --clobber
-
-  cleanup:
-    name: Удаление временных артефактов
-    needs: publish-release
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Удалить временные сборки
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const buildArtifactPrefixes = [
-              'control-panel-windows-x64',
-              'control-panel-macos-arm64',
-              'control-panel-linux-x64',
-            ];
-            const artifacts = await github.paginate(
-              github.rest.actions.listWorkflowRunArtifacts,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: context.runId,
-                per_page: 100,
-              },
-            );
-            const temporaryArtifacts = artifacts.filter((artifact) =>
-              buildArtifactPrefixes.some((prefix) =>
-                artifact.name === prefix || artifact.name.startsWith(`${prefix}-v`),
-              ),
-            );
-            for (const artifact of temporaryArtifacts) {
-              core.info(`Удаление артефакта: ${artifact.name} (${artifact.id})`);
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
-            }

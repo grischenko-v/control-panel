@@ -8,6 +8,7 @@
   "scripts": {
     "compile": "tsc && copyfiles -u 0 \"src/**/*.html\" \"src/**/*.css\" build",
     "typecheck": "tsc --noEmit",
+    "test": "bun run compile && bun test tests",
     "start": "bun run compile && electron .",
     "lint": "eslint .",
     "build:win": "bun run compile && electron-builder --win nsis --x64",

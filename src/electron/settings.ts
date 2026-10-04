@@ -1,4 +1,10 @@
-import type { SettingsPanelData } from './settings-contract';
+// Этот файл выполняется напрямую в изолированном окне браузера. Не добавляйте
+// сюда import/export: CommonJS-обёртка ожидает Node.js-объект `exports`, который
+// намеренно недоступен при nodeIntegration: false.
+interface SettingsPanelData {
+  title: string;
+  url: string;
+}
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -27,10 +33,14 @@ function createField(panel: SettingsPanelData, position: number): void {
   fields.append(label);
 }
 
-void window.settingsAPI.load().then(({ panels }) => {
-  panels.forEach(createField);
-  fields.querySelector('input')?.focus();
-});
+void window.settingsAPI.load()
+  .then(({ panels }) => {
+    panels.forEach(createField);
+    fields.querySelector('input')?.focus();
+  })
+  .catch(() => {
+    errorMessage.textContent = 'Не удалось загрузить настройки';
+  });
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();

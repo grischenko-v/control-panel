@@ -25,6 +25,12 @@ export default [
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ['src/electron/settings.ts'],
     languageOptions: {
       globals: globals.browser,

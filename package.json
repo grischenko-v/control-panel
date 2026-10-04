@@ -31,7 +31,8 @@
     "productName": "Панель управления",
     "asar": true,
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build-resources"
     },
     "files": [
       "build/**/*",
@@ -39,6 +40,7 @@
       "package.json"
     ],
     "mac": {
+      "icon": "icon.png",
       "category": "public.app-category.utilities",
       "target": [
         {
@@ -50,6 +52,7 @@
       ]
     },
     "win": {
+      "icon": "icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -60,6 +63,7 @@
       ]
     },
     "linux": {
+      "icon": "icons",
       "category": "Utility",
       "target": [
         {

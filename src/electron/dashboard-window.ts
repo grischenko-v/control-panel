@@ -1,23 +1,27 @@
-const { BrowserWindow } = require('electron');
-const { PanelViewport } = require('./panel-viewport');
+import { BrowserWindow } from 'electron';
+import type { EqualPanelLayout } from '../domain/equal-panel-layout';
+import type { PanelCollection } from '../domain/panel-collection';
+import { PanelViewport } from './panel-viewport';
 
-class DashboardWindow {
-  constructor({ layout }) {
+export class DashboardWindow {
+  private readonly layout: EqualPanelLayout;
+  private window?: BrowserWindow;
+  private viewports: PanelViewport[] = [];
+
+  constructor({ layout }: { layout: EqualPanelLayout }) {
     this.layout = layout;
-    this.window = undefined;
-    this.viewports = [];
     this.relayout = this.relayout.bind(this);
   }
 
-  isOpen() {
-    return Boolean(this.window) && !this.window.isDestroyed();
+  isOpen(): boolean {
+    return Boolean(this.window) && !this.window?.isDestroyed();
   }
 
-  nativeWindow() {
+  nativeWindow(): BrowserWindow | undefined {
     return this.isOpen() ? this.window : undefined;
   }
 
-  open(panels) {
+  open(panels: PanelCollection): void {
     if (this.isOpen()) {
       this.apply(panels);
       return;
@@ -38,7 +42,7 @@ class DashboardWindow {
     });
     this.window.setAutoHideMenuBar(true);
     this.viewports = [...panels].map(
-      (panel) => new PanelViewport({ hostWindow: this.window, panel }),
+      (panel) => new PanelViewport({ hostWindow: this.window as BrowserWindow, panel }),
     );
     this.window.on('resize', this.relayout);
     this.window.on('maximize', this.relayout);
@@ -48,22 +52,25 @@ class DashboardWindow {
     this.relayout();
   }
 
-  apply(panels) {
+  apply(panels: PanelCollection): void {
     panels.forEach((panel, position) => this.viewports[position]?.show(panel));
   }
 
-  relayout() {
-    if (!this.isOpen()) {
+  relayout(): void {
+    if (!this.window || this.window.isDestroyed()) {
       return;
     }
     const bounds = this.layout.arrange(this.window.getContentBounds());
-    this.viewports.forEach((viewport, position) => viewport.placeWithin(bounds[position]));
+    this.viewports.forEach((viewport, position) => {
+      const panelBounds = bounds[position];
+      if (panelBounds) {
+        viewport.placeWithin(panelBounds);
+      }
+    });
   }
 
-  release() {
+  release(): void {
     this.viewports.splice(0).forEach((viewport) => viewport.dispose());
     this.window = undefined;
   }
 }
-
-module.exports = { DashboardWindow };

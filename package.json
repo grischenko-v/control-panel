@@ -4,16 +4,26 @@
   "private": true,
   "productName": "Панель управления",
   "description": "Панель управления с тремя независимыми веб-областями",
-  "main": "main.js",
+  "main": "build/main.js",
   "scripts": {
-    "start": "electron .",
-    "build:win": "electron-builder --win nsis --x64",
-    "build:mac": "electron-builder --mac dmg --arm64",
-    "build:linux": "electron-builder --linux AppImage --x64"
+    "compile": "tsc && copyfiles -u 0 \"src/**/*.html\" \"src/**/*.css\" build",
+    "typecheck": "tsc --noEmit",
+    "start": "bun run compile && electron .",
+    "lint": "eslint .",
+    "build:win": "bun run compile && electron-builder --win nsis --x64",
+    "build:mac": "bun run compile && electron-builder --mac dmg --arm64",
+    "build:linux": "bun run compile && electron-builder --linux AppImage --x64"
   },
   "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@types/node": "^24.7.2",
+    "copyfiles": "^2.4.1",
     "electron": "^44.4.5",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.38.0",
+    "globals": "^16.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.1"
   },
   "build": {
     "appId": "com.example.controlpanel",
@@ -23,8 +33,7 @@
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "src/**/*",
+      "build/**/*",
       "config.json",
       "package.json"
     ],

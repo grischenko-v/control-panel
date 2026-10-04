@@ -21,6 +21,18 @@ bun install
 bun start
 ```
 
+Проверка контрактов TypeScript:
+
+```sh
+bun run typecheck
+```
+
+Проверка кода:
+
+```sh
+bun run lint
+```
+
 ## Сборка
 
 ```sh

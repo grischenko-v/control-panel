@@ -1,13 +1,26 @@
-const { PanelAddress } = require('./panel-address');
+import { PanelAddress } from './panel-address';
 
-class Panel {
-  constructor({ position, title, address }) {
+export interface PanelConfiguration {
+  title: string;
+  url: string;
+}
+
+export class Panel {
+  readonly position: number;
+  readonly title: string;
+  readonly address: PanelAddress;
+
+  constructor({ position, title, address }: {
+    position: number;
+    title?: string;
+    address: PanelAddress | string;
+  }) {
     this.position = position;
     this.title = String(title || `Панель ${position + 1}`);
     this.address = address instanceof PanelAddress ? address : new PanelAddress(address);
   }
 
-  static emptyAt(position) {
+  static emptyAt(position: number): Panel {
     return new Panel({
       position,
       title: `Панель ${position + 1}`,
@@ -15,7 +28,7 @@ class Panel {
     });
   }
 
-  static fromConfiguration(value, position) {
+  static fromConfiguration(value: Partial<PanelConfiguration> | undefined, position: number): Panel {
     return new Panel({
       position,
       title: value?.title,
@@ -23,19 +36,19 @@ class Panel {
     });
   }
 
-  isConfigured() {
+  isConfigured(): boolean {
     return this.address.isConfigured();
   }
 
-  navigationTarget() {
+  navigationTarget(): string {
     return this.address.navigationTarget();
   }
 
-  hasSameContent(other) {
-    return other instanceof Panel && this.address.equals(other.address);
+  hasSameContent(other: Panel): boolean {
+    return this.address.equals(other.address);
   }
 
-  withAddress(value) {
+  withAddress(value: string): Panel {
     if (!PanelAddress.isSupported(value)) {
       throw new Error(`Укажите корректный HTTP или HTTPS адрес для «${this.title}»`);
     }
@@ -46,9 +59,7 @@ class Panel {
     });
   }
 
-  toConfiguration() {
+  toConfiguration(): PanelConfiguration {
     return { title: this.title, url: this.address.toString() };
   }
 }
-
-module.exports = { Panel };

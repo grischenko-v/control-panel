@@ -1,8 +1,12 @@
-const { WebContentsView } = require('electron');
+import { WebContentsView, type BrowserWindow } from 'electron';
+import type { Panel } from '../domain/panel';
+import type { PanelBounds } from '../domain/equal-panel-layout';
 
-class PanelViewport {
-  constructor({ hostWindow, panel }) {
-    this.panel = undefined;
+export class PanelViewport {
+  private panel?: Panel;
+  private readonly view: WebContentsView;
+
+  constructor({ hostWindow, panel }: { hostWindow: BrowserWindow; panel: Panel }) {
     this.view = new WebContentsView({
       webPreferences: {
         contextIsolation: true,
@@ -16,24 +20,22 @@ class PanelViewport {
     this.show(panel);
   }
 
-  show(panel) {
+  show(panel: Panel): void {
     if (this.panel?.hasSameContent(panel)) {
       this.panel = panel;
       return;
     }
     this.panel = panel;
-    this.view.webContents.loadURL(panel.navigationTarget());
+    void this.view.webContents.loadURL(panel.navigationTarget());
   }
 
-  placeWithin(bounds) {
+  placeWithin(bounds: PanelBounds): void {
     this.view.setBounds(bounds.toElectronBounds());
   }
 
-  dispose() {
+  dispose(): void {
     if (!this.view.webContents.isDestroyed()) {
       this.view.webContents.close();
     }
   }
 }
-
-module.exports = { PanelViewport };

@@ -15,6 +15,7 @@ concurrency:
 jobs:
   version:
     name: Проверка версии
+    if: github.event.release.tag_name != 'latest'
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
@@ -39,6 +40,7 @@ jobs:
 
   quality:
     name: Линтинг и тесты
+    if: github.event.release.tag_name != 'latest'
     runs-on: ubuntu-latest
     steps:
       - name: Получить исходный код

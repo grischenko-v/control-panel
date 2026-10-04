@@ -11,9 +11,9 @@
     "test": "bun run compile && bun test tests",
     "start": "bun run compile && electron .",
     "lint": "eslint .",
-    "build:win": "bun run compile && electron-builder --win nsis --x64",
-    "build:mac": "bun run compile && electron-builder --mac dmg --arm64",
-    "build:linux": "bun run compile && electron-builder --linux AppImage --x64"
+    "build:win": "bun run compile && electron-builder --win nsis --x64 --publish never",
+    "build:mac": "bun run compile && electron-builder --mac dmg --arm64 --publish never",
+    "build:linux": "bun run compile && electron-builder --linux AppImage --x64 --publish never"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",

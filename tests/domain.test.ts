@@ -63,17 +63,29 @@ describe('границы рабочего стола', () => {
 
 class TestDesktopWindow implements DesktopWindow {
   bounds = { x: 100, y: 100, width: 1200, height: 800 };
+  alwaysOnTop = false;
   maximized = true;
+  menuBarVisible = true;
   unmaximizeCalls = 0;
   maximizeCalls = 0;
+  setAlwaysOnTopCalls: Array<{ flag: boolean; level?: Parameters<DesktopWindow['setAlwaysOnTop']>[1] }> = [];
+  setMenuBarVisibilityCalls: boolean[] = [];
   setBoundsCalls: ReturnType<DesktopWindow['getNormalBounds']>[] = [];
 
   getNormalBounds(): ReturnType<DesktopWindow['getNormalBounds']> {
     return this.bounds;
   }
 
+  isAlwaysOnTop(): boolean {
+    return this.alwaysOnTop;
+  }
+
   isMaximized(): boolean {
     return this.maximized;
+  }
+
+  isMenuBarVisible(): boolean {
+    return this.menuBarVisible;
   }
 
   maximize(): void {
@@ -81,9 +93,19 @@ class TestDesktopWindow implements DesktopWindow {
     this.maximizeCalls += 1;
   }
 
+  setAlwaysOnTop(flag: boolean, level?: Parameters<DesktopWindow['setAlwaysOnTop']>[1]): void {
+    this.alwaysOnTop = flag;
+    this.setAlwaysOnTopCalls.push({ flag, level });
+  }
+
   setBounds(bounds: ReturnType<DesktopWindow['getNormalBounds']>): void {
     this.bounds = bounds;
     this.setBoundsCalls.push(bounds);
+  }
+
+  setMenuBarVisibility(visible: boolean): void {
+    this.menuBarVisible = visible;
+    this.setMenuBarVisibilityCalls.push(visible);
   }
 
   unmaximize(): void {
@@ -104,6 +126,8 @@ describe('широкий режим окна', () => {
     mode.toggle(window);
 
     expect(window.unmaximizeCalls).toBe(1);
+    expect(window.setMenuBarVisibilityCalls).toEqual([false]);
+    expect(window.setAlwaysOnTopCalls).toEqual([{ flag: true, level: 'screen-saver' }]);
     expect(window.setBoundsCalls.at(-1)).toEqual({
       x: -1280,
       y: 0,
@@ -119,6 +143,11 @@ describe('широкий режим окна', () => {
       width: 1200,
       height: 800,
     });
+    expect(window.setMenuBarVisibilityCalls).toEqual([false, true]);
+    expect(window.setAlwaysOnTopCalls).toEqual([
+      { flag: true, level: 'screen-saver' },
+      { flag: false, level: undefined },
+    ]);
     expect(window.maximizeCalls).toBe(1);
   });
 });

@@ -1,4 +1,4 @@
-import { WebContentsView, type BrowserWindow } from 'electron';
+import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import type { Panel } from '../domain/panel';
 import type { PanelBounds } from '../domain/equal-panel-layout';
 
@@ -31,6 +31,10 @@ export class PanelViewport {
 
   placeWithin(bounds: PanelBounds): void {
     this.view.setBounds(bounds.toElectronBounds());
+  }
+
+  webContents(): WebContents {
+    return this.view.webContents;
   }
 
   dispose(): void {

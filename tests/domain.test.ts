@@ -4,6 +4,7 @@ import { DesktopWindowMode, type DesktopWindow } from '../src/domain/desktop-win
 import { EqualPanelLayout } from '../src/domain/equal-panel-layout';
 import { PanelAddress } from '../src/domain/panel-address';
 import { PanelCollection } from '../src/domain/panel-collection';
+import { reloadConfiguredPanels, type RefreshablePanelViewport } from '../src/domain/panel-refresh';
 
 describe('адрес панели', () => {
   test('принимает только HTTP и HTTPS', () => {
@@ -149,5 +150,64 @@ describe('широкий режим окна', () => {
       { flag: false, level: undefined },
     ]);
     expect(window.maximizeCalls).toBe(1);
+  });
+});
+
+class TestRefreshablePanelViewport implements RefreshablePanelViewport {
+  readonly loadedTargets: string[] = [];
+
+  constructor(private readonly destroyed = false) {}
+
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  reloadConfiguredPage(panel: Parameters<RefreshablePanelViewport['reloadConfiguredPage']>[0]): void {
+    this.loadedTargets.push(panel.navigationTarget());
+  }
+}
+
+describe('обновление панелей', () => {
+  test('F5 заново открывает страницы из конфига', () => {
+    const panels = PanelCollection.fromConfiguration({
+      panels: [
+        { title: 'Первая', url: 'https://example.com/home' },
+        { title: 'Вторая', url: 'https://example.org/dashboard' },
+        { title: 'Третья', url: 'https://example.net/status' },
+      ],
+    }, 3);
+    const viewports = [
+      new TestRefreshablePanelViewport(),
+      new TestRefreshablePanelViewport(),
+      new TestRefreshablePanelViewport(),
+    ];
+
+    reloadConfiguredPanels(panels, viewports);
+
+    expect(viewports.map((viewport) => viewport.loadedTargets)).toEqual([
+      ['https://example.com/home'],
+      ['https://example.org/dashboard'],
+      ['https://example.net/status'],
+    ]);
+  });
+
+  test('F5 не трогает уже закрытую панель', () => {
+    const panels = PanelCollection.fromConfiguration({
+      panels: [
+        { title: 'Первая', url: 'https://example.com/home' },
+        { title: 'Вторая', url: 'https://example.org/dashboard' },
+      ],
+    }, 2);
+    const viewports = [
+      new TestRefreshablePanelViewport(),
+      new TestRefreshablePanelViewport(true),
+    ];
+
+    reloadConfiguredPanels(panels, viewports);
+
+    expect(viewports.map((viewport) => viewport.loadedTargets)).toEqual([
+      ['https://example.com/home'],
+      [],
+    ]);
   });
 });

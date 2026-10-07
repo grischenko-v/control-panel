@@ -2,12 +2,14 @@ import { BrowserWindow, ipcMain, screen, type Event, type Input, type IpcMainEve
 import { DesktopWindowMode } from '../domain/desktop-window-mode';
 import type { EqualPanelLayout } from '../domain/equal-panel-layout';
 import type { PanelCollection } from '../domain/panel-collection';
+import { reloadConfiguredPanels } from '../domain/panel-refresh';
 import { PanelViewport } from './panel-viewport';
 
 export class DashboardWindow {
   private readonly layout: EqualPanelLayout;
   private readonly desktopMode: DesktopWindowMode;
   private window?: BrowserWindow;
+  private panels?: PanelCollection;
   private viewports: PanelViewport[] = [];
 
   constructor({ layout }: { layout: EqualPanelLayout }) {
@@ -44,6 +46,7 @@ export class DashboardWindow {
         sandbox: true,
       },
     });
+    this.panels = panels;
     this.configureMenuVisibility();
     this.viewports = [...panels].map(
       (panel) => new PanelViewport({ hostWindow: this.window as BrowserWindow, panel }),
@@ -74,6 +77,7 @@ export class DashboardWindow {
   }
 
   apply(panels: PanelCollection): void {
+    this.panels = panels;
     panels.forEach((panel, position) => this.viewports[position]?.show(panel));
   }
 
@@ -137,11 +141,7 @@ export class DashboardWindow {
   }
 
   private reloadPanels(): void {
-    this.viewports.forEach((viewport) => {
-      if (!viewport.webContents().isDestroyed()) {
-        viewport.webContents().reload();
-      }
-    });
+    reloadConfiguredPanels(this.panels, this.viewports);
   }
 
   private readonly navigatePanelBack = (event: IpcMainEvent): void => {
@@ -159,6 +159,7 @@ export class DashboardWindow {
     screen.off('display-removed', this.fitToDesktop);
     screen.off('display-metrics-changed', this.fitToDesktop);
     this.viewports.splice(0).forEach((viewport) => viewport.dispose());
+    this.panels = undefined;
     this.window = undefined;
     this.desktopMode.reset();
   }

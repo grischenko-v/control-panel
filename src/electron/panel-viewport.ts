@@ -2,8 +2,9 @@ import path from 'node:path';
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import type { Panel } from '../domain/panel';
 import type { PanelBounds } from '../domain/equal-panel-layout';
+import type { RefreshablePanelViewport } from '../domain/panel-refresh';
 
-export class PanelViewport {
+export class PanelViewport implements RefreshablePanelViewport {
   private panel?: Panel;
   private readonly view: WebContentsView;
 
@@ -31,12 +32,21 @@ export class PanelViewport {
     void this.view.webContents.loadURL(panel.navigationTarget());
   }
 
+  reloadConfiguredPage(panel: Panel): void {
+    this.panel = panel;
+    void this.view.webContents.loadURL(panel.navigationTarget());
+  }
+
   placeWithin(bounds: PanelBounds): void {
     this.view.setBounds(bounds.toElectronBounds());
   }
 
   webContents(): WebContents {
     return this.view.webContents;
+  }
+
+  isDestroyed(): boolean {
+    return this.view.webContents.isDestroyed();
   }
 
   dispose(): void {

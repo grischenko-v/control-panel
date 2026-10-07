@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, type Event, type Input } from 'electron';
+import { BrowserWindow, ipcMain, screen, type Event, type Input, type IpcMainEvent } from 'electron';
 import { DesktopWindowMode } from '../domain/desktop-window-mode';
 import type { EqualPanelLayout } from '../domain/equal-panel-layout';
 import type { PanelCollection } from '../domain/panel-collection';
@@ -44,7 +44,7 @@ export class DashboardWindow {
         sandbox: true,
       },
     });
-    this.window.setAutoHideMenuBar(true);
+    this.configureMenuVisibility();
     this.viewports = [...panels].map(
       (panel) => new PanelViewport({ hostWindow: this.window as BrowserWindow, panel }),
     );
@@ -53,11 +53,24 @@ export class DashboardWindow {
     this.window.on('maximize', this.relayout);
     this.window.on('unmaximize', this.relayout);
     this.window.on('closed', () => this.release());
+    ipcMain.on('panel:navigate-back', this.navigatePanelBack);
     screen.on('display-added', this.fitToDesktop);
     screen.on('display-removed', this.fitToDesktop);
     screen.on('display-metrics-changed', this.fitToDesktop);
     this.window.maximize();
     this.relayout();
+  }
+
+  private configureMenuVisibility(): void {
+    if (!this.window) {
+      return;
+    }
+
+    const shouldKeepSettingsMenuVisible = process.platform === 'win32';
+    this.window.setAutoHideMenuBar(!shouldKeepSettingsMenuVisible);
+    if (shouldKeepSettingsMenuVisible) {
+      this.window.setMenuBarVisibility(true);
+    }
   }
 
   apply(panels: PanelCollection): void {
@@ -131,7 +144,17 @@ export class DashboardWindow {
     });
   }
 
+  private readonly navigatePanelBack = (event: IpcMainEvent): void => {
+    const viewport = this.viewports.find((item) => item.webContents() === event.sender);
+    const webContents = viewport?.webContents();
+    if (!webContents || webContents.isDestroyed() || !webContents.canGoBack()) {
+      return;
+    }
+    webContents.goBack();
+  };
+
   release(): void {
+    ipcMain.off('panel:navigate-back', this.navigatePanelBack);
     screen.off('display-added', this.fitToDesktop);
     screen.off('display-removed', this.fitToDesktop);
     screen.off('display-metrics-changed', this.fitToDesktop);

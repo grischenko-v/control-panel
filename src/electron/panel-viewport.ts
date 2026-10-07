@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import type { Panel } from '../domain/panel';
 import type { PanelBounds } from '../domain/equal-panel-layout';
@@ -9,6 +10,7 @@ export class PanelViewport {
   constructor({ hostWindow, panel }: { hostWindow: BrowserWindow; panel: Panel }) {
     this.view = new WebContentsView({
       webPreferences: {
+        preload: path.join(__dirname, 'panel-preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,

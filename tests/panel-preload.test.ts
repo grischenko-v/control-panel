@@ -32,24 +32,27 @@ class TestElement {
 }
 
 class TestWindow {
-  private keydownListener?: (event: TestKeyboardEvent) => void;
+  private readonly listeners = new Map<string, Array<(event: TestKeyboardEvent) => void>>();
 
   addEventListener(
     type: string,
     listener: (event: TestKeyboardEvent) => void,
   ): void {
-    if (type === 'keydown') {
-      this.keydownListener = listener;
-    }
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
 
-  dispatch(event: TestKeyboardEvent): void {
-    this.keydownListener?.(event);
+  dispatch(type: string, event = new TestKeyboardEvent()): TestKeyboardEvent {
+    this.listeners.get(type)?.forEach((listener) => listener(event));
+    return event;
   }
 }
 
-function loadPanelPreload(activeElement: TestElement | null): {
-  event: TestKeyboardEvent;
+function loadPanelPreload({
+  activeElement,
+}: {
+  activeElement: TestElement | null;
+}): {
+  window: TestWindow;
   sentChannels: string[];
 } {
   const script = readFileSync(
@@ -60,7 +63,9 @@ function loadPanelPreload(activeElement: TestElement | null): {
   const sentChannels: string[] = [];
 
   vm.runInNewContext(script, {
-    document: { activeElement },
+    document: {
+      activeElement,
+    },
     exports: {},
     require: (moduleName: string) => {
       if (moduleName !== 'electron') {
@@ -75,28 +80,35 @@ function loadPanelPreload(activeElement: TestElement | null): {
     window: testWindow,
   });
 
-  const event = new TestKeyboardEvent();
-  testWindow.dispatch(event);
-  return { event, sentChannels };
+  return { window: testWindow, sentChannels };
 }
 
 describe('панельный preload', () => {
   test('Backspace отправляет команду назад, если фокус не в поле ввода', () => {
-    const { event, sentChannels } = loadPanelPreload(new TestElement('BODY'));
+    const { window, sentChannels } = loadPanelPreload({
+      activeElement: new TestElement('BODY'),
+    });
+    const event = window.dispatch('keydown');
 
     expect(event.defaultPrevented).toBe(true);
     expect(sentChannels).toEqual(['panel:navigate-back']);
   });
 
   test('Backspace не перехватывается в поле ввода', () => {
-    const { event, sentChannels } = loadPanelPreload(new TestElement('INPUT'));
+    const { window, sentChannels } = loadPanelPreload({
+      activeElement: new TestElement('INPUT'),
+    });
+    const event = window.dispatch('keydown');
 
     expect(event.defaultPrevented).toBe(false);
     expect(sentChannels).toEqual([]);
   });
 
   test('Backspace не перехватывается в редактируемой области', () => {
-    const { event, sentChannels } = loadPanelPreload(new TestElement('DIV', true));
+    const { window, sentChannels } = loadPanelPreload({
+      activeElement: new TestElement('DIV', true),
+    });
+    const event = window.dispatch('keydown');
 
     expect(event.defaultPrevented).toBe(false);
     expect(sentChannels).toEqual([]);

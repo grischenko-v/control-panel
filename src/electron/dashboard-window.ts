@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen, type Event, type Input, type IpcMainEvent } from 'electron';
 import { DesktopWindowMode } from '../domain/desktop-window-mode';
-import type { EqualPanelLayout } from '../domain/equal-panel-layout';
+import { PanelBounds, type EqualPanelLayout } from '../domain/equal-panel-layout';
+import { PanelAuthFocus } from '../domain/panel-auth-focus';
 import type { PanelCollection } from '../domain/panel-collection';
 import { reloadConfiguredPanels } from '../domain/panel-refresh';
 import { PanelViewport } from './panel-viewport';
@@ -8,6 +9,7 @@ import { PanelViewport } from './panel-viewport';
 export class DashboardWindow {
   private readonly layout: EqualPanelLayout;
   private readonly desktopMode: DesktopWindowMode;
+  private readonly authFocus = new PanelAuthFocus();
   private window?: BrowserWindow;
   private panels?: PanelCollection;
   private viewports: PanelViewport[] = [];
@@ -49,8 +51,12 @@ export class DashboardWindow {
     this.panels = panels;
     this.configureMenuVisibility();
     this.viewports = [...panels].map(
-      (panel) => new PanelViewport({ hostWindow: this.window as BrowserWindow, panel }),
+      (panel) => new PanelViewport({
+        hostWindow: this.window as BrowserWindow,
+        panel,
+      }),
     );
+    this.installPanelNavigationListeners();
     this.installKeyboardShortcuts();
     this.window.on('resize', this.relayout);
     this.window.on('maximize', this.relayout);
@@ -78,7 +84,9 @@ export class DashboardWindow {
 
   apply(panels: PanelCollection): void {
     this.panels = panels;
+    this.authFocus.reset();
     panels.forEach((panel, position) => this.viewports[position]?.show(panel));
+    this.relayout();
   }
 
   relayout(): void {
@@ -86,6 +94,26 @@ export class DashboardWindow {
       return;
     }
     const bounds = this.layout.arrange(this.window.getContentBounds());
+    const authPosition = this.authFocus.activePosition();
+    if (authPosition !== undefined) {
+      this.viewports.forEach((viewport, position) => {
+        if (position === authPosition) {
+          const contentBounds = this.window?.getContentBounds();
+          viewport.placeWithin(new PanelBounds({
+            x: 0,
+            y: 0,
+            width: contentBounds?.width ?? 1,
+            height: contentBounds?.height ?? 1,
+          }));
+          viewport.bringToFront();
+          return;
+        }
+
+        viewport.collapse();
+      });
+      return;
+    }
+
     this.viewports.forEach((viewport, position) => {
       const panelBounds = bounds[position];
       if (panelBounds) {
@@ -121,6 +149,31 @@ export class DashboardWindow {
     this.viewports.forEach((viewport) => {
       viewport.webContents().on('before-input-event', handleInput);
     });
+  }
+
+  private installPanelNavigationListeners(): void {
+    this.viewports.forEach((viewport, position) => {
+      const handleNavigation = (_event: Event, url: string) => {
+        this.handlePanelNavigation(position, url);
+      };
+      viewport.webContents().on('did-navigate', handleNavigation);
+      viewport.webContents().on('did-navigate-in-page', handleNavigation);
+      viewport.webContents().on('did-finish-load', () => {
+        this.handlePanelNavigation(position, viewport.webContents().getURL());
+      });
+    });
+  }
+
+  private handlePanelNavigation(position: number, url: string): void {
+    const result = this.authFocus.handleNavigation(position, url);
+    if (result === 'unchanged') {
+      return;
+    }
+
+    this.relayout();
+    if (result === 'released') {
+      reloadConfiguredPanels(this.panels, this.viewports);
+    }
   }
 
   private toggleDesktopWidth(): void {
@@ -160,6 +213,7 @@ export class DashboardWindow {
     screen.off('display-metrics-changed', this.fitToDesktop);
     this.viewports.splice(0).forEach((viewport) => viewport.dispose());
     this.panels = undefined;
+    this.authFocus.reset();
     this.window = undefined;
     this.desktopMode.reset();
   }

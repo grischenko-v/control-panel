@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { combinedDesktopBounds } from '../src/domain/desktop-bounds';
 import { DesktopWindowMode, type DesktopWindow } from '../src/domain/desktop-window-mode';
 import { EqualPanelLayout } from '../src/domain/equal-panel-layout';
+import { isIdentityAuthUrl, PanelAuthFocus } from '../src/domain/panel-auth-focus';
 import { PanelAddress } from '../src/domain/panel-address';
 import { PanelCollection } from '../src/domain/panel-collection';
 import { reloadConfiguredPanels, type RefreshablePanelViewport } from '../src/domain/panel-refresh';
@@ -209,5 +210,24 @@ describe('обновление панелей', () => {
       ['https://example.com/home'],
       [],
     ]);
+  });
+});
+
+describe('авторизация в одной панели', () => {
+  test('распознает страницу авторизации по порту 8040', () => {
+    expect(isIdentityAuthUrl('http://localhost:8040/login')).toBe(true);
+    expect(isIdentityAuthUrl('https://identity.example.com:8040/auth')).toBe(true);
+    expect(isIdentityAuthUrl('https://identity.example.com/auth')).toBe(false);
+  });
+
+  test('фиксирует первую панель с портом 8040 и отпускает ее после ухода с этого порта', () => {
+    const focus = new PanelAuthFocus();
+
+    expect(focus.handleNavigation(1, 'http://localhost:8040/login')).toBe('focused');
+    expect(focus.activePosition()).toBe(1);
+    expect(focus.handleNavigation(2, 'http://localhost:8040/login')).toBe('unchanged');
+    expect(focus.handleNavigation(1, 'http://localhost:8040/login/callback')).toBe('unchanged');
+    expect(focus.handleNavigation(1, 'https://example.com/dashboard')).toBe('released');
+    expect(focus.activePosition()).toBeUndefined();
   });
 });

@@ -15,10 +15,34 @@ class TestKeyboardEvent {
   preventDefault(): void {
     this.defaultPrevented = true;
   }
+
+  stopPropagation(): void {}
 }
 
 class TestElement {
+  readonly style: Record<string, string> = {};
+  readonly children: TestElement[] = [];
+  textContent = '';
+  title = '';
+  type = '';
+  private readonly listeners = new Map<string, Array<(event: TestKeyboardEvent) => void>>();
+
   constructor(readonly tagName: string, private readonly editable = false) {}
+
+  append(element: TestElement): void {
+    this.children.push(element);
+  }
+
+  setAttribute(): void {}
+
+  addEventListener(type: string, listener: (event: TestKeyboardEvent) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  dispatch(type: string, event = new TestKeyboardEvent()): TestKeyboardEvent {
+    this.listeners.get(type)?.forEach((listener) => listener(event));
+    return event;
+  }
 
   closest(selector: string): TestElement | null {
     if (selector.includes('contenteditable') && this.editable) {
@@ -28,6 +52,16 @@ class TestElement {
       return this;
     }
     return null;
+  }
+}
+
+class TestDocument {
+  readonly body = new TestElement('BODY');
+
+  constructor(readonly activeElement: TestElement | null) {}
+
+  createElement(tagName: string): TestElement {
+    return new TestElement(tagName.toUpperCase());
   }
 }
 
@@ -52,6 +86,8 @@ function loadPanelPreload({
 }: {
   activeElement: TestElement | null;
 }): {
+  document: TestDocument;
+  ipcListeners: Map<string, Array<(_event: unknown, expanded: boolean) => void>>;
   window: TestWindow;
   sentChannels: string[];
 } {
@@ -59,13 +95,13 @@ function loadPanelPreload({
     path.join(import.meta.dir, '../build/src/electron/panel-preload.js'),
     'utf8',
   );
+  const document = new TestDocument(activeElement);
   const testWindow = new TestWindow();
+  const ipcListeners = new Map<string, Array<(_event: unknown, expanded: boolean) => void>>();
   const sentChannels: string[] = [];
 
   vm.runInNewContext(script, {
-    document: {
-      activeElement,
-    },
+    document,
     exports: {},
     require: (moduleName: string) => {
       if (moduleName !== 'electron') {
@@ -73,6 +109,12 @@ function loadPanelPreload({
       }
       return {
         ipcRenderer: {
+          on: (
+            channel: string,
+            listener: (_event: unknown, expanded: boolean) => void,
+          ) => {
+            ipcListeners.set(channel, [...(ipcListeners.get(channel) ?? []), listener]);
+          },
           send: (channel: string) => sentChannels.push(channel),
         },
       };
@@ -80,7 +122,7 @@ function loadPanelPreload({
     window: testWindow,
   });
 
-  return { window: testWindow, sentChannels };
+  return { document, ipcListeners, window: testWindow, sentChannels };
 }
 
 describe('панельный preload', () => {
@@ -112,5 +154,20 @@ describe('панельный preload', () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(sentChannels).toEqual([]);
+  });
+
+  test('кнопка разворота отправляет команду и меняет подпись состояния', () => {
+    const { document, ipcListeners, window, sentChannels } = loadPanelPreload({
+      activeElement: new TestElement('BODY'),
+    });
+
+    window.dispatch('DOMContentLoaded');
+    const button = document.body.children[0];
+    button?.dispatch('click');
+    ipcListeners.get('panel:expanded-state')?.forEach((listener) => listener({}, true));
+
+    expect(sentChannels).toEqual(['panel:toggle-expanded']);
+    expect(button?.textContent).toBe('↙');
+    expect(button?.title).toBe('Вернуть панель на место');
   });
 });

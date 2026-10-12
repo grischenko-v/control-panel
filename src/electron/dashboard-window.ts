@@ -3,6 +3,7 @@ import { DesktopWindowMode } from '../domain/desktop-window-mode';
 import { PanelBounds, type EqualPanelLayout } from '../domain/equal-panel-layout';
 import { PanelAuthFocus } from '../domain/panel-auth-focus';
 import type { PanelCollection } from '../domain/panel-collection';
+import { PanelExpansion } from '../domain/panel-expansion';
 import { reloadConfiguredPanels } from '../domain/panel-refresh';
 import { PanelViewport } from './panel-viewport';
 
@@ -10,6 +11,7 @@ export class DashboardWindow {
   private readonly layout: EqualPanelLayout;
   private readonly desktopMode: DesktopWindowMode;
   private readonly authFocus = new PanelAuthFocus();
+  private readonly expansion = new PanelExpansion();
   private window?: BrowserWindow;
   private panels?: PanelCollection;
   private viewports: PanelViewport[] = [];
@@ -63,6 +65,7 @@ export class DashboardWindow {
     this.window.on('unmaximize', this.relayout);
     this.window.on('closed', () => this.release());
     ipcMain.on('panel:navigate-back', this.navigatePanelBack);
+    ipcMain.on('panel:toggle-expanded', this.togglePanelExpansion);
     screen.on('display-added', this.fitToDesktop);
     screen.on('display-removed', this.fitToDesktop);
     screen.on('display-metrics-changed', this.fitToDesktop);
@@ -85,6 +88,7 @@ export class DashboardWindow {
   apply(panels: PanelCollection): void {
     this.panels = panels;
     this.authFocus.reset();
+    this.expansion.reset();
     panels.forEach((panel, position) => this.viewports[position]?.show(panel));
     this.relayout();
   }
@@ -111,6 +115,14 @@ export class DashboardWindow {
 
         viewport.collapse();
       });
+      this.publishExpansionState();
+      return;
+    }
+
+    const expandedPosition = this.expansion.activePosition();
+    if (expandedPosition !== undefined) {
+      this.placeSinglePanel(expandedPosition);
+      this.publishExpansionState();
       return;
     }
 
@@ -118,6 +130,34 @@ export class DashboardWindow {
       const panelBounds = bounds[position];
       if (panelBounds) {
         viewport.placeWithin(panelBounds);
+      }
+    });
+    this.publishExpansionState();
+  }
+
+  private placeSinglePanel(activePosition: number): void {
+    const contentBounds = this.window?.getContentBounds();
+    this.viewports.forEach((viewport, position) => {
+      if (position === activePosition) {
+        viewport.placeWithin(new PanelBounds({
+          x: 0,
+          y: 0,
+          width: contentBounds?.width ?? 1,
+          height: contentBounds?.height ?? 1,
+        }));
+        viewport.bringToFront();
+        return;
+      }
+
+      viewport.collapse();
+    });
+  }
+
+  private publishExpansionState(): void {
+    const expandedPosition = this.expansion.activePosition();
+    this.viewports.forEach((viewport, position) => {
+      if (!viewport.isDestroyed()) {
+        viewport.webContents().send('panel:expanded-state', expandedPosition === position);
       }
     });
   }
@@ -206,14 +246,26 @@ export class DashboardWindow {
     webContents.goBack();
   };
 
+  private readonly togglePanelExpansion = (event: IpcMainEvent): void => {
+    const position = this.viewports.findIndex((item) => item.webContents() === event.sender);
+    if (position < 0) {
+      return;
+    }
+
+    this.expansion.toggle(position);
+    this.relayout();
+  };
+
   release(): void {
     ipcMain.off('panel:navigate-back', this.navigatePanelBack);
+    ipcMain.off('panel:toggle-expanded', this.togglePanelExpansion);
     screen.off('display-added', this.fitToDesktop);
     screen.off('display-removed', this.fitToDesktop);
     screen.off('display-metrics-changed', this.fitToDesktop);
     this.viewports.splice(0).forEach((viewport) => viewport.dispose());
     this.panels = undefined;
     this.authFocus.reset();
+    this.expansion.reset();
     this.window = undefined;
     this.desktopMode.reset();
   }

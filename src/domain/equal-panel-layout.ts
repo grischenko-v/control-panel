@@ -40,6 +40,33 @@ export class EqualPanelLayout {
   }
 
   arrange({ width, height }: Size): PanelBounds[] {
+    if (this.panelCount === 3) {
+      const columnGap = this.gap;
+      const rowGap = this.gap;
+      const availableWidth = Math.max(3, width - columnGap);
+      const mainWidth = Math.floor((availableWidth * 2) / 3);
+      const sideWidth = availableWidth - mainWidth;
+      const availableHeight = Math.max(2, height - rowGap);
+      const topHeight = Math.floor(availableHeight / 2);
+      const bottomHeight = availableHeight - topHeight;
+
+      return [
+        new PanelBounds({ x: 0, y: 0, width: mainWidth, height }),
+        new PanelBounds({
+          x: mainWidth + columnGap,
+          y: 0,
+          width: sideWidth,
+          height: topHeight,
+        }),
+        new PanelBounds({
+          x: mainWidth + columnGap,
+          y: topHeight + rowGap,
+          width: sideWidth,
+          height: bottomHeight,
+        }),
+      ];
+    }
+
     const availableWidth = Math.max(
       this.panelCount,
       width - this.gap * (this.panelCount - 1),

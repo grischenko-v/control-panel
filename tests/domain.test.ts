@@ -5,6 +5,7 @@ import { EqualPanelLayout } from '../src/domain/equal-panel-layout';
 import { isIdentityAuthUrl, PanelAuthFocus } from '../src/domain/panel-auth-focus';
 import { PanelAddress } from '../src/domain/panel-address';
 import { PanelCollection } from '../src/domain/panel-collection';
+import { PanelExpansion } from '../src/domain/panel-expansion';
 import { reloadConfiguredPanels, type RefreshablePanelViewport } from '../src/domain/panel-refresh';
 
 describe('адрес панели', () => {
@@ -35,15 +36,15 @@ describe('набор панелей', () => {
 });
 
 describe('раскладка панелей', () => {
-  test('делит доступную ширину на три части без пересечений', () => {
+  test('ставит первую панель на две трети ширины, а две остальные справа', () => {
     const bounds = new EqualPanelLayout({ panelCount: 3, gap: 2 })
-      .arrange({ width: 1000, height: 600 })
+      .arrange({ width: 1200, height: 900 })
       .map((item) => item.toElectronBounds());
 
     expect(bounds).toEqual([
-      { x: 0, y: 0, width: 332, height: 600 },
-      { x: 334, y: 0, width: 332, height: 600 },
-      { x: 668, y: 0, width: 332, height: 600 },
+      { x: 0, y: 0, width: 798, height: 900 },
+      { x: 800, y: 0, width: 400, height: 449 },
+      { x: 800, y: 451, width: 400, height: 449 },
     ]);
   });
 });
@@ -229,5 +230,26 @@ describe('авторизация в одной панели', () => {
     expect(focus.handleNavigation(1, 'http://localhost:8040/login/callback')).toBe('unchanged');
     expect(focus.handleNavigation(1, 'https://example.com/dashboard')).toBe('released');
     expect(focus.activePosition()).toBeUndefined();
+  });
+});
+
+describe('разворот панели', () => {
+  test('переключает выбранную панель на весь экран и обратно', () => {
+    const expansion = new PanelExpansion();
+
+    expansion.toggle(2);
+    expect(expansion.activePosition()).toBe(2);
+
+    expansion.toggle(2);
+    expect(expansion.activePosition()).toBeUndefined();
+  });
+
+  test('переносит разворот на другую панель', () => {
+    const expansion = new PanelExpansion();
+
+    expansion.toggle(0);
+    expansion.toggle(1);
+
+    expect(expansion.activePosition()).toBe(1);
   });
 });

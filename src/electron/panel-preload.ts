@@ -1,6 +1,8 @@
 import { ipcRenderer } from 'electron';
 
 let expandButton: HTMLButtonElement | undefined;
+let panelExpanded = false;
+const clickedPageControls = new WeakSet<Element>();
 
 function ensureExpandButton(): HTMLButtonElement | undefined {
   if (expandButton || !document.body) {
@@ -35,6 +37,7 @@ function ensureExpandButton(): HTMLButtonElement | undefined {
 }
 
 function setExpandedState(expanded: boolean): void {
+  panelExpanded = expanded;
   const button = ensureExpandButton();
   if (!button) {
     return;
@@ -43,6 +46,31 @@ function setExpandedState(expanded: boolean): void {
   button.textContent = expanded ? '↙' : '⤢';
   button.title = expanded ? 'Вернуть панель на место' : 'Развернуть панель';
   button.setAttribute('aria-label', button.title);
+  applyPageAutomation();
+}
+
+function clickOnce(element: Element | null | undefined): void {
+  if (!element || clickedPageControls.has(element)) {
+    return;
+  }
+
+  clickedPageControls.add(element);
+  if (element instanceof HTMLElement) {
+    element.click();
+  }
+}
+
+function clickPageControl(selector: string): void {
+  const element = document.querySelector(selector);
+  clickOnce(element?.closest('button, [role="button"], a') ?? element);
+}
+
+function applyPageAutomation(): void {
+  if (panelExpanded) {
+    return;
+  }
+
+  clickPageControl('.header-hide-all-button__icon');
 }
 
 function isEditableElement(element: Element | null): boolean {
@@ -76,6 +104,11 @@ window.addEventListener('keydown', (event) => {
 
 window.addEventListener('DOMContentLoaded', () => {
   ensureExpandButton();
+  applyPageAutomation();
+  new MutationObserver(applyPageAutomation).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 });
 
 ipcRenderer.on('panel:expanded-state', (_event, expanded: boolean) => {

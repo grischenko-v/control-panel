@@ -2,7 +2,9 @@ import { ipcRenderer } from 'electron';
 
 let expandButton: HTMLButtonElement | undefined;
 let panelExpanded = false;
+let pageAutomationTimer: ReturnType<typeof setTimeout> | undefined;
 const clickedPageControls = new WeakSet<Element>();
+const pageAutomationDelayMs = 500;
 
 function ensureExpandButton(): HTMLButtonElement | undefined {
   if (expandButton || !document.body) {
@@ -46,7 +48,7 @@ function setExpandedState(expanded: boolean): void {
   button.textContent = expanded ? '↙' : '⤢';
   button.title = expanded ? 'Вернуть панель на место' : 'Развернуть панель';
   button.setAttribute('aria-label', button.title);
-  applyPageAutomation();
+  schedulePageAutomation();
 }
 
 function clickOnce(element: Element | null | undefined): void {
@@ -71,6 +73,17 @@ function applyPageAutomation(): void {
   }
 
   clickPageControl('.header-hide-all-button__icon');
+}
+
+function schedulePageAutomation(): void {
+  if (pageAutomationTimer !== undefined) {
+    clearTimeout(pageAutomationTimer);
+  }
+
+  pageAutomationTimer = setTimeout(() => {
+    pageAutomationTimer = undefined;
+    applyPageAutomation();
+  }, pageAutomationDelayMs);
 }
 
 function isEditableElement(element: Element | null): boolean {
@@ -104,8 +117,8 @@ window.addEventListener('keydown', (event) => {
 
 window.addEventListener('DOMContentLoaded', () => {
   ensureExpandButton();
-  applyPageAutomation();
-  new MutationObserver(applyPageAutomation).observe(document.documentElement, {
+  schedulePageAutomation();
+  new MutationObserver(schedulePageAutomation).observe(document.documentElement, {
     childList: true,
     subtree: true,
   });

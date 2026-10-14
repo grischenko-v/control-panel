@@ -121,6 +121,31 @@ class TestMutationObserver {
   observe(): void {}
 }
 
+class TestTimers {
+  private nextId = 1;
+  private readonly callbacks = new Map<number, () => void>();
+
+  setTimeout(callback: () => void): number {
+    const id = this.nextId;
+    this.nextId += 1;
+    this.callbacks.set(id, callback);
+    return id;
+  }
+
+  clearTimeout(id: number): void {
+    this.callbacks.delete(id);
+  }
+
+  runNext(): void {
+    const [id, callback] = this.callbacks.entries().next().value ?? [];
+    if (id === undefined || !callback) {
+      return;
+    }
+    this.callbacks.delete(id);
+    callback();
+  }
+}
+
 function loadPanelPreload({
   activeElement,
   pageControls = [],
@@ -130,6 +155,7 @@ function loadPanelPreload({
 }): {
   document: TestDocument;
   ipcListeners: Map<string, Array<(_event: unknown, expanded: boolean) => void>>;
+  timers: TestTimers;
   window: TestWindow;
   sentChannels: string[];
 } {
@@ -138,6 +164,7 @@ function loadPanelPreload({
     'utf8',
   );
   const document = new TestDocument(activeElement, pageControls);
+  const timers = new TestTimers();
   const testWindow = new TestWindow();
   const ipcListeners = new Map<string, Array<(_event: unknown, expanded: boolean) => void>>();
   const sentChannels: string[] = [];
@@ -145,6 +172,7 @@ function loadPanelPreload({
   vm.runInNewContext(script, {
     document,
     exports: {},
+    clearTimeout: (id: number) => timers.clearTimeout(id),
     HTMLElement: TestElement,
     MutationObserver: TestMutationObserver,
     require: (moduleName: string) => {
@@ -163,10 +191,11 @@ function loadPanelPreload({
         },
       };
     },
+    setTimeout: (callback: () => void) => timers.setTimeout(callback),
     window: testWindow,
   });
 
-  return { document, ipcListeners, window: testWindow, sentChannels };
+  return { document, ipcListeners, timers, window: testWindow, sentChannels };
 }
 
 describe('панельный preload', () => {
@@ -219,13 +248,15 @@ describe('панельный preload', () => {
     const headerButton = new TestElement('BUTTON');
     const headerIcon = new TestElement('SPAN', false, 'header-hide-all-button__icon');
     headerButton.append(headerIcon);
-    const { window } = loadPanelPreload({
+    const { timers, window } = loadPanelPreload({
       activeElement: new TestElement('BODY'),
       pageControls: [headerButton, headerIcon],
     });
 
     window.dispatch('DOMContentLoaded');
 
+    expect(headerButton.clicked).toBe(0);
+    timers.runNext();
     expect(headerButton.clicked).toBe(1);
     expect(headerIcon.clicked).toBe(0);
   });
@@ -234,13 +265,14 @@ describe('панельный preload', () => {
     const headerButton = new TestElement('BUTTON');
     const headerIcon = new TestElement('SPAN', false, 'header-hide-all-button__icon');
     headerButton.append(headerIcon);
-    const { ipcListeners, window } = loadPanelPreload({
+    const { ipcListeners, timers, window } = loadPanelPreload({
       activeElement: new TestElement('BODY'),
       pageControls: [headerButton, headerIcon],
     });
 
     ipcListeners.get('panel:expanded-state')?.forEach((listener) => listener({}, true));
     window.dispatch('DOMContentLoaded');
+    timers.runNext();
 
     expect(headerButton.clicked).toBe(0);
   });
@@ -249,7 +281,7 @@ describe('панельный preload', () => {
     const headerButton = new TestElement('BUTTON');
     const headerIcon = new TestElement('SPAN', false, 'header-hide-all-button__icon');
     headerButton.append(headerIcon);
-    const { ipcListeners, window } = loadPanelPreload({
+    const { ipcListeners, timers, window } = loadPanelPreload({
       activeElement: new TestElement('BODY'),
       pageControls: [headerButton, headerIcon],
     });
@@ -258,6 +290,8 @@ describe('панельный preload', () => {
     window.dispatch('DOMContentLoaded');
     ipcListeners.get('panel:expanded-state')?.forEach((listener) => listener({}, false));
 
+    expect(headerButton.clicked).toBe(0);
+    timers.runNext();
     expect(headerButton.clicked).toBe(1);
   });
 });
